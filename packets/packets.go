@@ -13,8 +13,8 @@ type DataStream struct {
 	readOffset uint
 }
 
-func NewDataStream(data []byte, len uint) DataStream {
-	return DataStream{
+func NewDataStream(data []byte, len uint) *DataStream {
+	return &DataStream{
 		Data:       data,
 		Length:     len,
 		readOffset: 0,

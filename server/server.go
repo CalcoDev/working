@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"game_server/client"
 	"game_server/packets"
 	"log"
@@ -26,16 +27,22 @@ type Server struct {
 	Owner   client.ClientId
 
 	CurrClientId client.ClientId
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-func New(ip string, port uint) Server {
-	return Server{
+func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *Server {
+	return &Server{
 		IP:         ip,
 		Port:       port,
 		DataStream: make([]byte, MAX_STREAM_SIZE),
 
 		Clients: make([]DummyClient, 0),
 		Owner:   client.CLIENT_ID_NONE,
+
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
@@ -57,43 +64,61 @@ func (s *Server) Start() {
 	log.Print("LOG: Established connection with UDP.")
 	s.Connection = conn
 
+	go func() {
+		<-s.ctx.Done()
+		s.handleStop()
+	}()
+
 	for {
-		n, addr, err := s.Connection.ReadFromUDP(s.DataStream)
-		if err != nil {
-			log.Printf("WARNING: Failed while reading from UDP [%q]!", err)
-		}
-		if n == 0 {
-			log.Printf("WARNING: Someone sent 0 bytes lmfao.")
-			continue
-		}
-
-		c, exists := s.has_dummy_client(addr)
-		if !exists {
-			dataStream := packets.NewDataStream(s.DataStream, uint(n))
-			value, err := dataStream.ReadByte()
-
-			if err == nil && dataStream.Finished && value == packets.PING_PACKET {
-				s.Clients = append(s.Clients, DummyClient{
-					ClientId: s.CurrClientId.Next(),
-					Address:  *addr,
-				})
-				c = &s.Clients[len(s.Clients)-1]
-				log.Printf("INFO: Client [%s] connected and received ID [%d]!", c.Address.String(), c.ClientId)
-			} else {
-				if err != nil {
-					log.Printf("WARN: Failed to read byte from received message!")
-				}
-				log.Printf("INFO: Address [%s] tried connecting to server but sent incorrect data [%q]!", addr.String(), s.DataStream[:n])
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+			n, addr, err := s.Connection.ReadFromUDP(s.DataStream)
+			if err != nil {
+				log.Printf("WARNING: Failed while reading from UDP [%q]!", err)
+			}
+			if n == 0 {
+				log.Printf("WARNING: Someone sent 0 bytes lmfao.")
 				continue
 			}
-		}
 
-		log.Printf("LOG: Received %d bytes from %d: %q", n, c.ClientId, s.DataStream[:n])
+			c, exists := s.has_dummy_client(addr)
+			if !exists {
+				dataStream := packets.NewDataStream(s.DataStream, uint(n))
+				value, err := dataStream.ReadByte()
+
+				if err == nil && dataStream.Finished && value == packets.PING_PACKET {
+					s.Clients = append(s.Clients, DummyClient{
+						ClientId: s.CurrClientId.Next(),
+						Address:  *addr,
+					})
+					c = &s.Clients[len(s.Clients)-1]
+					log.Printf("INFO: Client [%s] connected and received ID [%d]!", c.Address.String(), c.ClientId)
+				} else {
+					if err != nil {
+						log.Printf("WARN: Failed to read byte from received message!")
+					}
+					log.Printf("INFO: Address [%s] tried connecting to server but sent incorrect data [%q]!", addr.String(), s.DataStream[:n])
+					continue
+				}
+			}
+
+			log.Printf("LOG: Received %d bytes from %d: %q", n, c.ClientId, s.DataStream[:n])
+		}
 	}
 }
 
 func (s *Server) Stop() {
-	s.Connection.Close()
+	s.cancel()
+}
+
+func (s *Server) handleStop() {
+	log.Print("LOG: Received stop signal. Stopping...")
+	if err := s.Connection.Close(); err != nil {
+		log.Printf("ERROR & WARNING: Failed to stop the server ??? [%q]", err)
+	}
+	log.Print("LOG: Stopped server.")
 }
 
 func (s *Server) has_dummy_client(addr *net.UDPAddr) (*DummyClient, bool) {
