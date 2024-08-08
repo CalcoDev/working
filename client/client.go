@@ -17,6 +17,10 @@ func (c *ClientId) Next() ClientId {
 	return *c - 1
 }
 
+func (c *ClientId) PeekNext() ClientId {
+	return *c + 1
+}
+
 type ClientState uint
 
 const (
@@ -78,17 +82,15 @@ func (c *Client) Start(server_address string) {
 		log.Fatalf("ERROR: Failed dialing UDP [%q]!", err)
 	}
 	log.Printf("LOG: Established connection with UDP. Addr [%s].", c.GetAddress())
-
 	c.Connection = conn
 }
 
 func (c *Client) Send(bytes []byte) {
-	n, err := c.Connection.Write([]byte{69})
+	n, err := c.Connection.Write(bytes)
 	if err != nil {
-		log.Printf("WARNING: Failed sending message.")
+		log.Printf("WARNING: Failed sending message to server.")
 	}
-	log.Printf("Sent %d bytes to server.", n)
-
+	log.Printf("LOG: Sent %d bytes to server [%q].", n, bytes[:n])
 }
 
 // TODO(calco): add this function lmao

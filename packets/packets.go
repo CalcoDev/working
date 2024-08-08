@@ -2,8 +2,8 @@ package packets
 
 import "errors"
 
-const PING_PACKET = 69
-const PONG_PACKET = 420
+const PING_PACKET byte = 69
+const PONG_PACKET byte = 252
 
 type DataStream struct {
 	Data     []byte

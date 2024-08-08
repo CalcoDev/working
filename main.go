@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"game_server/client"
+	"game_server/packets"
 	"game_server/server"
 	"log"
 	"os"
@@ -59,8 +60,8 @@ func handle_client(log_file bool) {
 	c := client.New()
 
 	c.Start(SERVER_IP + ":" + strconv.FormatUint(uint64(SERVER_PORT), 10))
-	// c.Start("127.0.0.1:55009")
-	// c.Start("127.0.0.1:25565")
+
+	c.Send([]byte{packets.PING_PACKET})
 
 	// TODO(calco): worthless atm as Start call is blocking
 	c.Stop()
@@ -103,9 +104,9 @@ func handle_server(log_file bool) {
 
 	select {
 	case <-interruptChan:
-		fmt.Println("Stopping server. [received system interrupt]")
+		fmt.Println("MAIN: Stopping server. [received system interrupt]")
 	case <-stopChan:
-		fmt.Println("Stopping server. [received quit input]")
+		fmt.Println("MAIN: Stopping server. [received quit input]")
 	}
 
 	s.Stop()
