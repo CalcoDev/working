@@ -1,3 +1,0 @@
-2024/08/08 20:53:56 LOG: Trying to start server on 127.0.0.1:25565
-2024/08/08 20:53:56 LOG: Established connection with UDP.
-2024/08/08 20:54:07 INFO: Address [127.0.0.1:63318] tried connecting to server but sent incorrect data ["New, registered IP."]!

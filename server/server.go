@@ -34,6 +34,7 @@ type EventClientDisconnected struct {
 }
 
 type Server struct {
+	// TODO(calco): Maybe make this a single net.UDPAddr
 	IP    string
 	Port  uint
 	State ServerState
@@ -62,7 +63,7 @@ func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *
 		Clients: make([]DummyClient, 0),
 		Owner:   client.CLIENT_ID_NONE,
 
-		EventChan: make(chan interface{}),
+		EventChan: make(chan interface{}, 16),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -74,6 +75,7 @@ func (s *Server) GetAddress() string {
 }
 
 func (s *Server) Start() {
+	log.Printf("INFO: Trying to start server on address: [%q]", s.GetAddress())
 	addr, err := net.ResolveUDPAddr("udp", s.GetAddress())
 	if err != nil {
 		log.Fatalf("ERROR: Failed resolving UDP address [%q]!", err)
@@ -81,12 +83,13 @@ func (s *Server) Start() {
 
 	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
-		log.Fatalf("ERROR: Failed dialing UDP [%q]!", err)
+		log.Fatalf("ERROR: Failed listening to UDP [%q]!", err)
 	}
 
 	log.Print("LOG: Established connection with UDP.")
 	s.Connection = conn
 	s.State = ServerStarted
+
 	s.EventChan <- EventStarted{}
 
 	go func() {
@@ -120,6 +123,12 @@ func (s *Server) Start() {
 					})
 					c = &s.Clients[len(s.Clients)-1]
 					log.Printf("INFO: Client [%s] connected and received ID [%d]!", c.Address.String(), c.ClientId)
+
+					// TODO(calco): Send pong packet. Confirm owner.
+					if len(s.Clients) == 1 {
+						s.Owner = c.ClientId
+					}
+
 					s.EventChan <- EventClientConnected{Client: c}
 				} else {
 					if err != nil {
