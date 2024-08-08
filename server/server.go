@@ -16,17 +16,36 @@ type DummyClient struct {
 	Address  net.UDPAddr
 }
 
+type ServerState uint
+
+const (
+	ServerNone ServerState = iota
+	ServerStarted
+	ServerStopped
+)
+
+type EventStarted struct{}
+type EventStopped struct{}
+type EventClientConnected struct {
+	Client *DummyClient
+}
+type EventClientDisconnected struct {
+	Client DummyClient
+}
+
 type Server struct {
-	IP   string
-	Port uint
+	IP    string
+	Port  uint
+	State ServerState
 
 	Connection *net.UDPConn
 	DataStream []byte
 
-	Clients []DummyClient
-	Owner   client.ClientId
-
+	Clients      []DummyClient
+	Owner        client.ClientId
 	CurrClientId client.ClientId
+
+	EventChan chan interface{}
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -34,12 +53,16 @@ type Server struct {
 
 func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *Server {
 	return &Server{
-		IP:         ip,
-		Port:       port,
+		IP:    ip,
+		Port:  port,
+		State: ServerNone,
+
 		DataStream: make([]byte, MAX_STREAM_SIZE),
 
 		Clients: make([]DummyClient, 0),
 		Owner:   client.CLIENT_ID_NONE,
+
+		EventChan: make(chan interface{}),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -63,6 +86,8 @@ func (s *Server) Start() {
 
 	log.Print("LOG: Established connection with UDP.")
 	s.Connection = conn
+	s.State = ServerStarted
+	s.EventChan <- EventStarted{}
 
 	go func() {
 		<-s.ctx.Done()
@@ -95,6 +120,7 @@ func (s *Server) Start() {
 					})
 					c = &s.Clients[len(s.Clients)-1]
 					log.Printf("INFO: Client [%s] connected and received ID [%d]!", c.Address.String(), c.ClientId)
+					s.EventChan <- EventClientConnected{Client: c}
 				} else {
 					if err != nil {
 						log.Printf("WARN: Failed to read byte from received message!")
@@ -118,6 +144,8 @@ func (s *Server) handleStop() {
 	if err := s.Connection.Close(); err != nil {
 		log.Printf("ERROR & WARNING: Failed to stop the server ??? [%q]", err)
 	}
+	s.State = ServerStopped
+	s.EventChan <- EventStopped{}
 	log.Print("LOG: Stopped server.")
 }
 
