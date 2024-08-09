@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const SERVER_IP = "127.0.0.1"
@@ -57,8 +58,39 @@ func handle_client(log_file bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	c := client.New(ctx, cancel)
+	go c.Start(SERVER_IP + ":" + strconv.FormatUint(uint64(SERVER_PORT), 10))
 
-	c.Start(SERVER_IP + ":" + strconv.FormatUint(uint64(SERVER_PORT), 10))
+	interruptChan := make(chan os.Signal, 1)
+	signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
+
+	stopChan := make(chan bool)
+	go func() {
+		fmt.Println("Client is running, logging to some place. Enter messages here.\nquit -> exit")
+		for {
+			scanner := bufio.NewScanner(os.Stdin)
+			if scanner.Scan() {
+				input := scanner.Text()
+				if strings.ToLower(input) == "quit" {
+					stopChan <- true
+					return
+				} else {
+					// fmt.Printf("Sending message [%s] to server!\n", input)
+					c.Send([]byte(input))
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-interruptChan:
+		fmt.Println("MAIN: Stopping client. [received system interrupt]")
+	case <-stopChan:
+		fmt.Println("MAIN: Stopping client. [received quit input]")
+	case <-c.PollStopped(3 * time.Second):
+		fmt.Println("MAIN: Client stopped. Abandoning main...")
+		return
+	}
+
 	c.Stop()
 }
 
@@ -82,7 +114,7 @@ func handle_server(log_file bool) {
 
 	stopChan := make(chan bool)
 	go func() {
-		fmt.Println("Server is running, outputting logs to the file. Enter commands here.\nquit -> exit")
+		fmt.Println("Server is running, outputting logs to wherever you put them. Enter commands here.\nquit -> exit")
 		for {
 			scanner := bufio.NewScanner(os.Stdin)
 			if scanner.Scan() {
@@ -91,7 +123,8 @@ func handle_server(log_file bool) {
 					stopChan <- true
 					return
 				} else {
-					fmt.Println("Uknown input...")
+					// fmt.Println("Uknown input...")
+					s.Broadcast([]byte(input))
 				}
 			}
 		}
@@ -102,6 +135,9 @@ func handle_server(log_file bool) {
 		fmt.Println("MAIN: Stopping server. [received system interrupt]")
 	case <-stopChan:
 		fmt.Println("MAIN: Stopping server. [received quit input]")
+	case <-s.PollStopped(3 * time.Second):
+		fmt.Println("MAIN: Server stopped. Abandoning main...")
+		return
 	}
 
 	s.Stop()

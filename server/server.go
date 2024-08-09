@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"time"
 )
 
 const MAX_STREAM_SIZE = 2048
@@ -25,15 +26,6 @@ const (
 	ServerStopping
 	ServerStopped
 )
-
-type EventStarted struct{}
-type EventStopped struct{}
-type EventClientConnected struct {
-	Client *DummyClient
-}
-type EventClientDisconnected struct {
-	Client *DummyClient
-}
 
 // TODO(calco): Should also send the data but for now I won't ???
 type EventClientPacket struct {
@@ -60,8 +52,8 @@ type Server struct {
 	// Callbacks
 	OnStarted           action.Event
 	OnStopped           action.Event
-	OnClientConnected   action.Action[EventClientConnected]
-	OnClientDiconnected action.Action[EventClientDisconnected]
+	OnClientConnected   action.Action[*DummyClient]
+	OnClientDiconnected action.Action[*DummyClient]
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -83,8 +75,8 @@ func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *
 		// Callbacks
 		OnStarted:           action.NewEvent(),
 		OnStopped:           action.NewEvent(),
-		OnClientConnected:   action.NewAction[EventClientConnected](),
-		OnClientDiconnected: action.NewAction[EventClientDisconnected](),
+		OnClientConnected:   action.NewAction[*DummyClient](),
+		OnClientDiconnected: action.NewAction[*DummyClient](),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -184,7 +176,7 @@ func (s *Server) listenToUDP() {
 					log.Printf("INFO: Established Client (ID [%d] | Addr [%s]) as owner!", c.ClientId, c.Address.String())
 				}
 				// s.EventChan <- EventClientConnected{Client: c}
-				s.OnClientConnected.Invoke(EventClientConnected{Client: c})
+				s.OnClientConnected.Invoke(c)
 			} else {
 				if err != nil {
 					log.Printf("WARN: Failed to read byte from received message!")
@@ -200,12 +192,26 @@ func (s *Server) listenToUDP() {
 	}
 }
 
+func (s *Server) Broadcast(bytes []byte) (*DummyClient, int, error) {
+	var n int
+	for _, c := range s.Clients {
+		n, err := s.sendToDummyClient(&c, bytes)
+		if err != nil {
+			return &c, n, err
+		}
+	}
+	return nil, n, nil
+}
+
 func (s *Server) SendToClient(clientId client.ClientId, bytes []byte) (int, error) {
 	c, exists := s.hasClientId(clientId)
 	if !exists {
 		log.Printf("WARN: Tried sending message to invalid client ID [%d].", clientId)
 	}
+	return s.sendToDummyClient(c, bytes)
+}
 
+func (s *Server) sendToDummyClient(c *DummyClient, bytes []byte) (int, error) {
 	n, err := s.Connection.WriteToUDP(bytes, c.Address)
 	if err != nil {
 		log.Printf("WARN: Failed sending message to client (ID [%d] | Addr [%s]): [%q]!", c.ClientId, c.Address.String(), err)
@@ -219,6 +225,10 @@ func (s *Server) SendToClient(clientId client.ClientId, bytes []byte) (int, erro
 }
 
 func (s *Server) Stop() {
+	if s.State != ServerStarted {
+		s.handleStop()
+		return
+	}
 	stopCh := make(chan bool)
 	s.OnStopped.Subscribe(func() {
 		stopCh <- true
@@ -226,6 +236,22 @@ func (s *Server) Stop() {
 	s.cancel()
 	<-stopCh
 	close(stopCh)
+}
+
+func (s *Server) PollStopped(duration time.Duration) <-chan struct{} {
+	stopChan := make(chan struct{})
+	go func() {
+		defer close(stopChan)
+		ticker := time.NewTicker(duration)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			if s.State == ServerStopped {
+				return
+			}
+		}
+	}()
+	return stopChan
 }
 
 func (s *Server) handleStop() {

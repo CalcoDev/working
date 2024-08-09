@@ -2,14 +2,16 @@ package client
 
 import (
 	"context"
+	"game_server/action"
 	"game_server/packets"
 	"log"
 	"net"
 	"strconv"
+	"time"
 )
 
 const MAX_STREAM_SIZE = 2048
-
+const CONNECTION_TIMEOUT_DELAY = 3 * time.Second
 const CLIENT_ID_NONE = -1
 
 type ClientId int
@@ -28,6 +30,7 @@ type ClientState uint
 const (
 	ClientNone ClientState = iota
 	ClientStarted
+	ClientStopping
 	ClientStopped
 )
 
@@ -49,6 +52,12 @@ type Client struct {
 
 	Server DummyServer
 
+	// Callbacks
+	OnStarted     action.Event
+	OnStopped     action.Event
+	OnConnected   action.Action[*DummyServer]
+	OnDiconnected action.Action[*DummyServer]
+
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -61,6 +70,12 @@ func New(ctx context.Context, cancel context.CancelFunc) *Client {
 		IsOwner:    false,
 		ClientId:   CLIENT_ID_NONE,
 		DataStream: make([]byte, MAX_STREAM_SIZE),
+
+		// Callbacks
+		OnStarted:     action.NewEvent(),
+		OnStopped:     action.NewEvent(),
+		OnConnected:   action.NewAction[*DummyServer](),
+		OnDiconnected: action.NewAction[*DummyServer](),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -94,11 +109,20 @@ func (c *Client) Start(server_address string) {
 	log.Printf("LOG: Established connection with UDP. Addr [%s].", c.GetAddress())
 	c.Connection = conn
 
+	c.OnStarted.Invoke()
+
 	log.Printf("LOG: Sending PING packet to server...")
 	c.Send([]byte{packets.PING_PACKET})
 
+	timeoutDeadline := time.Now().Add(CONNECTION_TIMEOUT_DELAY)
+	c.Connection.SetReadDeadline(timeoutDeadline)
 	n, addr, err := c.Connection.ReadFromUDP(c.DataStream)
 	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			log.Printf("ERROR: Tried connecting to the server but timed out!")
+			c.Stop()
+			return
+		}
 		log.Printf("WARN: Error receiving PONG packet from server!")
 		c.Stop()
 		return
@@ -109,30 +133,36 @@ func (c *Client) Start(server_address string) {
 	} else {
 		log.Printf("LOG: Received [%d] bytes from server [%s]: [%q]", n, addr.String(), c.DataStream[:n])
 	}
+	c.Connection.SetReadDeadline(time.Time{})
 
 	if c.DataStream[0] == packets.PONG_PACKET {
 		log.Printf("LOG: Confirmed PONG packet from server! Connection established.")
+		c.Server = DummyServer{Address: addr}
 		c.ClientId = ClientId(c.DataStream[1])
 		c.IsOwner = Byte2bool(c.DataStream[2])
 		log.Printf("LOG: Established self information. Client ID [%d] | IsOwner [%v].", c.ClientId, c.IsOwner)
 	} else {
 		log.Printf("WARN: Packet mismatch! Expected PONG [%d] but received [%d]!", packets.PONG_PACKET, c.DataStream[0])
+		c.Stop()
+		return
 	}
 
+	c.OnConnected.Invoke(&c.Server)
+
 	// TODO(calco): Slightly odd to start the loop here, but if no confirmation, no listen ??
-	// go func() {
-	// 	<-c.ctx.Done()
-	// 	c.handleStop()
-	// }()
+	go func() {
+		<-c.ctx.Done()
+		c.handleStop()
+	}()
 
-	// for {
-	// 	select {
-	// 	case <-c.ctx.Done():
-	// 		return
-	// 	default:
-
-	// 	}
-	// }
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		default:
+			c.listenToUDP()
+		}
+	}
 }
 
 func (c *Client) Send(bytes []byte) {
@@ -143,13 +173,69 @@ func (c *Client) Send(bytes []byte) {
 	log.Printf("LOG: Sent %d bytes to server [%q].", n, bytes[:n])
 }
 
+func (c *Client) listenToUDP() {
+	for {
+		n, addr, err := c.Connection.ReadFromUDP(c.DataStream)
+		if err != nil {
+			if c.State == ClientStopping || c.State == ClientStopped {
+				return
+			}
+			log.Printf("WARNING: Failed while reading from UDP [%q]!", err)
+		}
+		if n == 0 {
+			log.Printf("WARNING: Someone sent 0 bytes lmfao.")
+			continue
+		}
+
+		// receive bytes from unknown server
+		if !addr.IP.Equal(c.Server.Address.IP) || addr.Port != c.Server.Address.Port {
+			continue
+		}
+		// TODO(calco): Do stuff with this data.
+		log.Printf("LOG: Received [%d] bytes from server [%s]: [%q]", n, addr.String(), c.DataStream[:n])
+	}
+}
+
+func (s *Client) PollStopped(duration time.Duration) <-chan struct{} {
+	stopChan := make(chan struct{})
+	go func() {
+		defer close(stopChan)
+		ticker := time.NewTicker(duration)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			if s.State == ClientStopped {
+				return
+			}
+		}
+	}()
+	return stopChan
+}
+
 // TODO(calco): add this function lmao
 func (c *Client) Stop() {
-
+	if c.State != ClientStarted {
+		c.handleStop()
+		return
+	}
+	stopCh := make(chan bool)
+	c.OnStopped.Subscribe(func() {
+		stopCh <- true
+	})
+	c.cancel()
+	<-stopCh
+	close(stopCh)
 }
 
 func (c *Client) handleStop() {
-
+	log.Print("LOG: Received stop signal. Stopping...")
+	c.State = ClientStopping
+	if err := c.Connection.Close(); err != nil {
+		log.Printf("ERROR & WARNING: Failed to stop the client ??? [%q]", err)
+	}
+	c.State = ClientStopped
+	c.OnStopped.Invoke()
+	log.Print("LOG: Stopped client.")
 }
 
 // Adapted from https://0x0f.me/blog/golang-compiler-optimization/
