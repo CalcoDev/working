@@ -2,12 +2,13 @@ package working
 
 import (
 	"context"
-	"game-server/pkg/action"
-	"game-server/pkg/packets"
 	"log"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/calcodev/working/pkg/actions"
+	"github.com/calcodev/working/pkg/packets"
 )
 
 const CONNECTION_TIMEOUT_DELAY = 3 * time.Second
@@ -52,11 +53,11 @@ type Client struct {
 	Server DummyServer
 
 	// Callbacks
-	OnStarted        action.Action
-	OnStopped        action.Action
-	OnConnected      action.Action1[*DummyServer]
-	OnDiconnected    action.Action1[*DummyServer]
-	OnPacketReceived action.Action2[int, []byte]
+	OnStarted        actions.Action
+	OnStopped        actions.Action
+	OnConnected      actions.Action1[*DummyServer]
+	OnDiconnected    actions.Action1[*DummyServer]
+	OnPacketReceived actions.Action2[int, []byte]
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -72,11 +73,11 @@ func NewClient(ctx context.Context, cancel context.CancelFunc) *Client {
 		DataStream: make([]byte, MAX_STREAM_SIZE),
 
 		// Callbacks
-		OnStarted:        action.NewAction(),
-		OnStopped:        action.NewAction(),
-		OnConnected:      action.NewAction1[*DummyServer](),
-		OnDiconnected:    action.NewAction1[*DummyServer](),
-		OnPacketReceived: action.NewAction2[int, []byte](),
+		OnStarted:        actions.NewAction(),
+		OnStopped:        actions.NewAction(),
+		OnConnected:      actions.NewAction1[*DummyServer](),
+		OnDiconnected:    actions.NewAction1[*DummyServer](),
+		OnPacketReceived: actions.NewAction2[int, []byte](),
 
 		ctx:    ctx,
 		cancel: cancel,

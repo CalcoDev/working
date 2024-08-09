@@ -2,12 +2,13 @@ package working
 
 import (
 	"context"
-	"game-server/pkg/action"
-	"game-server/pkg/packets"
 	"log"
 	"net"
 	"strconv"
 	"time"
+
+	"github.com/calcodev/working/pkg/actions"
+	"github.com/calcodev/working/pkg/packets"
 )
 
 const MAX_STREAM_SIZE = 2048
@@ -49,11 +50,11 @@ type Server struct {
 	// EventChan chan interface{}
 
 	// Callbacks
-	OnStarted           action.Action
-	OnStopped           action.Action
-	OnClientConnected   action.Action1[*DummyClient]
-	OnClientDiconnected action.Action1[*DummyClient]
-	OnPacketReceived    action.Action3[*DummyClient, int, []byte]
+	OnStarted           actions.Action
+	OnStopped           actions.Action
+	OnClientConnected   actions.Action1[*DummyClient]
+	OnClientDiconnected actions.Action1[*DummyClient]
+	OnPacketReceived    actions.Action3[*DummyClient, int, []byte]
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -73,11 +74,11 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, ip string, port u
 		// EventChan: make(chan interface{}, 16),
 
 		// Callbacks
-		OnStarted:           action.NewAction(),
-		OnStopped:           action.NewAction(),
-		OnClientConnected:   action.NewAction1[*DummyClient](),
-		OnClientDiconnected: action.NewAction1[*DummyClient](),
-		OnPacketReceived:    action.NewAction3[*DummyClient, int, []byte](),
+		OnStarted:           actions.NewAction(),
+		OnStopped:           actions.NewAction(),
+		OnClientConnected:   actions.NewAction1[*DummyClient](),
+		OnClientDiconnected: actions.NewAction1[*DummyClient](),
+		OnPacketReceived:    actions.NewAction3[*DummyClient, int, []byte](),
 
 		ctx:    ctx,
 		cancel: cancel,

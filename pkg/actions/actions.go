@@ -1,4 +1,4 @@
-package action
+package actions
 
 type Actionable interface {
 	Subscribe()

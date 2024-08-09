@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"game-server/pkg/working"
 	"log"
 	"os"
 	"os/signal"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/calcodev/working"
 )
 
 const SERVER_IP = "127.0.0.1"
