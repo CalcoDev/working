@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"game_server/client"
-	"game_server/packets"
 	"game_server/server"
 	"log"
 	"os"
@@ -60,10 +59,6 @@ func handle_client(log_file bool) {
 	c := client.New()
 
 	c.Start(SERVER_IP + ":" + strconv.FormatUint(uint64(SERVER_PORT), 10))
-
-	c.Send([]byte{packets.PING_PACKET})
-
-	// TODO(calco): worthless atm as Start call is blocking
 	c.Stop()
 }
 

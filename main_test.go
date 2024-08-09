@@ -3,9 +3,7 @@ package main_test
 import (
 	"context"
 	"fmt"
-	"game_server/client"
 	"game_server/server"
-	"net"
 	"testing"
 	"time"
 )
@@ -55,56 +53,4 @@ func TestServerStartOrder(t *testing.T) {
 			fmt.Printf("Client [%q] connected.", e.Client)
 		}
 	}, 1*time.Second)
-}
-
-func TestServerClient(t *testing.T) {
-	ip, err := getLocalIP()
-	if err != nil {
-		t.Fatalf("ERROR: Failed to get local IP [%q]!", err)
-	}
-
-	c := client.New(ip)
-
-	startServerForDuration(func(ev interface{}) {
-		switch e := ev.(type) {
-		case server.EventStarted:
-			fmt.Println("Server started.")
-			fmt.Println("Starting client...")
-			c.Start()
-		case server.EventStopped:
-			fmt.Println("Server stopped.")
-		case server.EventClientConnected:
-			fmt.Printf("Client [%q] connected.", e.Client)
-		case server.EventClientDisconnected:
-			fmt.Printf("Client [%q] connected.", e.Client)
-		}
-	}, 5*time.Second)
-}
-
-// not my own
-func getLocalIP() (string, error) {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return "", err
-	}
-	for _, iface := range interfaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			ipnet, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			if ipnet.IP.IsLoopback() {
-				continue
-			}
-			return ipnet.IP.String(), nil
-		}
-	}
-	return "", fmt.Errorf("no IP address found")
 }

@@ -122,16 +122,20 @@ func (s *Server) Start() {
 					// TODO(calco): Maybe this should be in a goroutine, but frankly, I don't want to do it now.
 					// n, err := s.SendToClient(clientId, []byte{packets.PONG_PACKET})
 
-					n, err := s.Connection.WriteToUDP([]byte{packets.PONG_PACKET}, addr)
+					wouldBeId := s.CurrClientId
+					wouldBeOwner := s.CurrClientId == 0
+					// TODO(calco): If you somehow have more than 256 client ids uh ... too bad?
+					data := []byte{packets.PONG_PACKET, byte(wouldBeId), Bool2byte(wouldBeOwner)}
+					n, err := s.Connection.WriteToUDP(data, addr)
 					if err != nil {
 						log.Printf("WARN: Failed sending message to client (Addr [%s]): [%q]!", addr.String(), err)
-					} else if n != 1 {
+					} else if n < len(data) {
 						log.Printf("WARN: Failed sending all bytes to client (Addr [%s]). Only sent [%d!]", addr.String(), n)
 					} else {
 						log.Printf("LOG: Send [%d] bytes to client (Addr [%s]): [%q]", n, addr.String(), packets.PONG_PACKET)
 					}
 
-					if err != nil || n != 1 {
+					if err != nil || n < len(data) {
 						log.Printf("WARN: Couldn't verify client connection. Rejecting!")
 						continue
 					}
@@ -144,6 +148,7 @@ func (s *Server) Start() {
 
 					if len(s.Clients) == 1 {
 						s.Owner = c.ClientId
+						log.Printf("INFO: Established Client (ID [%d] | Addr [%s]) as owner!", c.ClientId, c.Address.String())
 					}
 					s.EventChan <- EventClientConnected{Client: c}
 				} else {
@@ -155,6 +160,8 @@ func (s *Server) Start() {
 				}
 			} else {
 				log.Printf("LOG: Received [%d] bytes from [%d]: [%q]", n, c.ClientId, s.DataStream[:n])
+
+				// TODO(calco): Do stuff with this data.
 			}
 		}
 	}
@@ -212,4 +219,17 @@ func (s *Server) hasClientId(clientId client.ClientId) (*DummyClient, bool) {
 	}
 
 	return nil, false
+}
+
+// Taken from https://0x0f.me/blog/golang-compiler-optimization/
+func Bool2byte(b bool) byte {
+	// The compiler currently only optimizes this form.
+	// See issue 6011.
+	var i byte
+	if b {
+		i = 1
+	} else {
+		i = 0
+	}
+	return i
 }

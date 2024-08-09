@@ -1,6 +1,7 @@
 package client
 
 import (
+	"game_server/packets"
 	"log"
 	"net"
 	"strconv"
@@ -18,7 +19,7 @@ func (c *ClientId) Next() ClientId {
 }
 
 func (c *ClientId) PeekNext() ClientId {
-	return *c + 1
+	return *c
 }
 
 type ClientState uint
@@ -43,6 +44,7 @@ type Client struct {
 	ClientId ClientId
 
 	Connection *net.UDPConn
+	DataStream []byte
 
 	Server DummyServer
 }
@@ -50,10 +52,11 @@ type Client struct {
 func New() *Client {
 	return &Client{
 		// IP:       ip,
-		Port:     0,
-		State:    ClientNone,
-		IsOwner:  false,
-		ClientId: CLIENT_ID_NONE,
+		Port:       0,
+		State:      ClientNone,
+		IsOwner:    false,
+		ClientId:   CLIENT_ID_NONE,
+		DataStream: make([]byte, MAX_STREAM_SIZE),
 	}
 }
 
@@ -83,6 +86,31 @@ func (c *Client) Start(server_address string) {
 	}
 	log.Printf("LOG: Established connection with UDP. Addr [%s].", c.GetAddress())
 	c.Connection = conn
+
+	log.Printf("LOG: Sending PING packet to server...")
+	c.Send([]byte{packets.PING_PACKET})
+
+	n, addr, err := c.Connection.ReadFromUDP(c.DataStream)
+	if err != nil {
+		log.Printf("WARN: Error receiving PONG packet from server!")
+		c.Stop()
+		return
+	} else if n < 3 { // TODO(calco): THIS SHOULD NOT BE HARDCODED LOL
+		log.Printf("WARN: Server sent back PONG packet with too little information!")
+		c.Stop()
+		return
+	} else {
+		log.Printf("LOG: Received [%d] bytes from server [%s]: [%q]", n, addr.String(), c.DataStream[:n])
+	}
+
+	if c.DataStream[0] == packets.PONG_PACKET {
+		log.Printf("LOG: Confirmed PONG packet from server! Connection established.")
+		c.ClientId = ClientId(c.DataStream[1])
+		c.IsOwner = Byte2bool(c.DataStream[2])
+		log.Printf("LOG: Established self information. Client ID [%d] | IsOwner [%v].", c.ClientId, c.IsOwner)
+	} else {
+		log.Printf("WARN: Packet mismatch! Expected PONG [%d] but received [%d]!", packets.PONG_PACKET, c.DataStream[0])
+	}
 }
 
 func (c *Client) Send(bytes []byte) {
@@ -95,4 +123,17 @@ func (c *Client) Send(bytes []byte) {
 
 // TODO(calco): add this function lmao
 func (c *Client) Stop() {
+}
+
+// Adapted from https://0x0f.me/blog/golang-compiler-optimization/
+func Byte2bool(b byte) bool {
+	// The compiler currently only optimizes this form.
+	// See issue 6011.
+	var i bool
+	if b == 0 {
+		i = false
+	} else {
+		i = true
+	}
+	return i
 }
