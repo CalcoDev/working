@@ -9,7 +9,7 @@ type Action struct {
 	Callbacks [](func())
 }
 type Action1[TParam any] struct {
-	Callbacks [](func(...TParam))
+	Callbacks [](func(TParam))
 }
 type Action2[T1 any, T2 any] struct {
 	Callbacks [](func(T1, T2))
@@ -42,14 +42,14 @@ func (a *Action) Invoke() {
 }
 
 // FUNCTIONS 1
-func NewAction1[TParam any](callbacks ...func(...TParam)) Action1[TParam] {
+func NewAction1[TParam any](callbacks ...func(TParam)) Action1[TParam] {
 	action := Action1[TParam]{}
 	for _, callback := range callbacks {
 		action.Subscribe(callback)
 	}
 	return action
 }
-func (a *Action1[TParam]) Subscribe(callback func(...TParam)) {
+func (a *Action1[TParam]) Subscribe(callback func(TParam)) {
 	a.Callbacks = append(a.Callbacks, callback)
 }
 func (a *Action1[TParam]) Invoke(param TParam) {
