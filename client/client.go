@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"game_server/packets"
 	"log"
 	"net"
@@ -47,9 +48,12 @@ type Client struct {
 	DataStream []byte
 
 	Server DummyServer
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-func New() *Client {
+func New(ctx context.Context, cancel context.CancelFunc) *Client {
 	return &Client{
 		// IP:       ip,
 		Port:       0,
@@ -57,6 +61,9 @@ func New() *Client {
 		IsOwner:    false,
 		ClientId:   CLIENT_ID_NONE,
 		DataStream: make([]byte, MAX_STREAM_SIZE),
+
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
@@ -111,6 +118,21 @@ func (c *Client) Start(server_address string) {
 	} else {
 		log.Printf("WARN: Packet mismatch! Expected PONG [%d] but received [%d]!", packets.PONG_PACKET, c.DataStream[0])
 	}
+
+	// TODO(calco): Slightly odd to start the loop here, but if no confirmation, no listen ??
+	// go func() {
+	// 	<-c.ctx.Done()
+	// 	c.handleStop()
+	// }()
+
+	// for {
+	// 	select {
+	// 	case <-c.ctx.Done():
+	// 		return
+	// 	default:
+
+	// 	}
+	// }
 }
 
 func (c *Client) Send(bytes []byte) {
@@ -123,6 +145,11 @@ func (c *Client) Send(bytes []byte) {
 
 // TODO(calco): add this function lmao
 func (c *Client) Stop() {
+
+}
+
+func (c *Client) handleStop() {
+
 }
 
 // Adapted from https://0x0f.me/blog/golang-compiler-optimization/

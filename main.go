@@ -54,9 +54,9 @@ func handle_client(log_file bool) {
 	if log_file {
 		log.SetOutput(file)
 	}
-	// ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 
-	c := client.New()
+	c := client.New(ctx, cancel)
 
 	c.Start(SERVER_IP + ":" + strconv.FormatUint(uint64(SERVER_PORT), 10))
 	c.Stop()

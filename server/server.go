@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"game_server/action"
 	"game_server/client"
 	"game_server/packets"
 	"log"
@@ -21,6 +22,7 @@ type ServerState uint
 const (
 	ServerNone ServerState = iota
 	ServerStarted
+	ServerStopping
 	ServerStopped
 )
 
@@ -31,6 +33,13 @@ type EventClientConnected struct {
 }
 type EventClientDisconnected struct {
 	Client *DummyClient
+}
+
+// TODO(calco): Should also send the data but for now I won't ???
+type EventClientPacket struct {
+	// TODO(calco): Maybe send just the client id to make it safer ???
+	Client *DummyClient
+	Length int
 }
 
 type Server struct {
@@ -46,7 +55,13 @@ type Server struct {
 	Owner        client.ClientId
 	CurrClientId client.ClientId
 
-	EventChan chan interface{}
+	// EventChan chan interface{}
+
+	// Callbacks
+	OnStarted           action.Event
+	OnStopped           action.Event
+	OnClientConnected   action.Action[EventClientConnected]
+	OnClientDiconnected action.Action[EventClientDisconnected]
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -63,7 +78,13 @@ func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *
 		Clients: make([]DummyClient, 0),
 		Owner:   client.CLIENT_ID_NONE,
 
-		EventChan: make(chan interface{}, 16),
+		// EventChan: make(chan interface{}, 16),
+
+		// Callbacks
+		OnStarted:           action.NewEvent(),
+		OnStopped:           action.NewEvent(),
+		OnClientConnected:   action.NewAction[EventClientConnected](),
+		OnClientDiconnected: action.NewAction[EventClientDisconnected](),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -90,7 +111,8 @@ func (s *Server) Start() {
 	s.Connection = conn
 	s.State = ServerStarted
 
-	s.EventChan <- EventStarted{}
+	// s.EventChan <- EventStarted{}
+	s.OnStarted.Invoke()
 
 	go func() {
 		<-s.ctx.Done()
@@ -99,70 +121,81 @@ func (s *Server) Start() {
 
 	for {
 		select {
+		// NOTE(calco): listenToUDP starts failing when disconnecting.
 		case <-s.ctx.Done():
 			return
 		default:
-			n, addr, err := s.Connection.ReadFromUDP(s.DataStream)
-			if err != nil {
-				log.Printf("WARNING: Failed while reading from UDP [%q]!", err)
+			s.listenToUDP()
+		}
+	}
+}
+
+func (s *Server) listenToUDP() {
+	for {
+		n, addr, err := s.Connection.ReadFromUDP(s.DataStream)
+		if err != nil {
+			if s.State == ServerStopping || s.State == ServerStopped {
+				return
 			}
-			if n == 0 {
-				log.Printf("WARNING: Someone sent 0 bytes lmfao.")
-				continue
-			}
+			log.Printf("WARNING: Failed while reading from UDP [%q]!", err)
+		}
+		if n == 0 {
+			log.Printf("WARNING: Someone sent 0 bytes lmfao.")
+			continue
+		}
 
-			c, exists := s.hasDummyClient(addr)
-			if !exists {
-				dataStream := packets.NewDataStream(s.DataStream, uint(n))
-				value, err := dataStream.ReadByte()
+		c, exists := s.hasDummyClient(addr)
+		if !exists {
+			dataStream := packets.NewDataStream(s.DataStream, uint(n))
+			value, err := dataStream.ReadByte()
 
-				log.Printf("LOG: Received [%d] bytes from [%s]: [%q]", n, addr.String(), s.DataStream[:n])
+			log.Printf("LOG: Received [%d] bytes from [%s]: [%q]", n, addr.String(), s.DataStream[:n])
 
-				if err == nil && dataStream.Finished && value == packets.PING_PACKET {
-					// TODO(calco): Maybe this should be in a goroutine, but frankly, I don't want to do it now.
-					// n, err := s.SendToClient(clientId, []byte{packets.PONG_PACKET})
+			if err == nil && dataStream.Finished && value == packets.PING_PACKET {
+				// TODO(calco): Maybe this should be in a goroutine, but frankly, I don't want to do it now.
+				// n, err := s.SendToClient(clientId, []byte{packets.PONG_PACKET})
 
-					wouldBeId := s.CurrClientId
-					wouldBeOwner := s.CurrClientId == 0
-					// TODO(calco): If you somehow have more than 256 client ids uh ... too bad?
-					data := []byte{packets.PONG_PACKET, byte(wouldBeId), Bool2byte(wouldBeOwner)}
-					n, err := s.Connection.WriteToUDP(data, addr)
-					if err != nil {
-						log.Printf("WARN: Failed sending message to client (Addr [%s]): [%q]!", addr.String(), err)
-					} else if n < len(data) {
-						log.Printf("WARN: Failed sending all bytes to client (Addr [%s]). Only sent [%d!]", addr.String(), n)
-					} else {
-						log.Printf("LOG: Send [%d] bytes to client (Addr [%s]): [%q]", n, addr.String(), packets.PONG_PACKET)
-					}
-
-					if err != nil || n < len(data) {
-						log.Printf("WARN: Couldn't verify client connection. Rejecting!")
-						continue
-					}
-					s.Clients = append(s.Clients, DummyClient{
-						ClientId: s.CurrClientId.Next(),
-						Address:  addr,
-					})
-					c = &s.Clients[len(s.Clients)-1]
-					log.Printf("INFO: Client [%s] connected and received ID [%d]!", c.Address.String(), c.ClientId)
-
-					if len(s.Clients) == 1 {
-						s.Owner = c.ClientId
-						log.Printf("INFO: Established Client (ID [%d] | Addr [%s]) as owner!", c.ClientId, c.Address.String())
-					}
-					s.EventChan <- EventClientConnected{Client: c}
+				wouldBeId := s.CurrClientId
+				wouldBeOwner := s.CurrClientId == 0
+				// TODO(calco): If you somehow have more than 256 client ids uh ... too bad?
+				data := []byte{packets.PONG_PACKET, byte(wouldBeId), Bool2byte(wouldBeOwner)}
+				n, err := s.Connection.WriteToUDP(data, addr)
+				if err != nil {
+					log.Printf("WARN: Failed sending message to client (Addr [%s]): [%q]!", addr.String(), err)
+				} else if n < len(data) {
+					log.Printf("WARN: Failed sending all bytes to client (Addr [%s]). Only sent [%d!]", addr.String(), n)
 				} else {
-					if err != nil {
-						log.Printf("WARN: Failed to read byte from received message!")
-					}
-					log.Printf("INFO: Address [%s] tried connecting to server but sent incorrect data [%q]!", addr.String(), s.DataStream[:n])
+					log.Printf("LOG: Send [%d] bytes to client (Addr [%s]): [%q]", n, addr.String(), packets.PONG_PACKET)
+				}
+
+				if err != nil || n < len(data) {
+					log.Printf("WARN: Couldn't verify client connection. Rejecting!")
 					continue
 				}
-			} else {
-				log.Printf("LOG: Received [%d] bytes from [%d]: [%q]", n, c.ClientId, s.DataStream[:n])
+				s.Clients = append(s.Clients, DummyClient{
+					ClientId: s.CurrClientId.Next(),
+					Address:  addr,
+				})
+				c = &s.Clients[len(s.Clients)-1]
+				log.Printf("INFO: Client [%s] connected and received ID [%d]!", c.Address.String(), c.ClientId)
 
-				// TODO(calco): Do stuff with this data.
+				if len(s.Clients) == 1 {
+					s.Owner = c.ClientId
+					log.Printf("INFO: Established Client (ID [%d] | Addr [%s]) as owner!", c.ClientId, c.Address.String())
+				}
+				// s.EventChan <- EventClientConnected{Client: c}
+				s.OnClientConnected.Invoke(EventClientConnected{Client: c})
+			} else {
+				if err != nil {
+					log.Printf("WARN: Failed to read byte from received message!")
+				}
+				log.Printf("INFO: Address [%s] tried connecting to server but sent incorrect data [%q]!", addr.String(), s.DataStream[:n])
+				continue
 			}
+		} else {
+			log.Printf("LOG: Received [%d] bytes from [%d]: [%q]", n, c.ClientId, s.DataStream[:n])
+
+			// TODO(calco): Do stuff with this data.
 		}
 	}
 }
@@ -186,16 +219,25 @@ func (s *Server) SendToClient(clientId client.ClientId, bytes []byte) (int, erro
 }
 
 func (s *Server) Stop() {
+	stopCh := make(chan bool)
+	s.OnStopped.Subscribe(func() {
+		stopCh <- true
+	})
 	s.cancel()
+	<-stopCh
+	close(stopCh)
 }
 
 func (s *Server) handleStop() {
 	log.Print("LOG: Received stop signal. Stopping...")
+	s.State = ServerStopping
 	if err := s.Connection.Close(); err != nil {
 		log.Printf("ERROR & WARNING: Failed to stop the server ??? [%q]", err)
 	}
 	s.State = ServerStopped
-	s.EventChan <- EventStopped{}
+	// s.EventChan <- EventStopped{}
+	s.OnStopped.Invoke()
+	// close(s.EventChan)
 	log.Print("LOG: Stopped server.")
 }
 
