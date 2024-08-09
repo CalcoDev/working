@@ -45,13 +45,12 @@ func main() {
 }
 
 func handle_client(log_file bool) {
-	file, err := os.OpenFile(CLIENT_LOGS, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatalf("ERROR: Failed opening %s: [%q]", SERVER_LOGS, err)
-	}
-	defer file.Close()
-
 	if log_file {
+		file, err := os.OpenFile(CLIENT_LOGS, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatalf("ERROR: Failed opening %s: [%q]", SERVER_LOGS, err)
+		}
+		defer file.Close()
 		log.SetOutput(file)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -99,13 +98,12 @@ func handle_client(log_file bool) {
 }
 
 func handle_server(log_file bool) {
-	file, err := os.OpenFile(SERVER_LOGS, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Fatalf("ERROR: Failed opening %s: [%q]", SERVER_LOGS, err)
-	}
-	defer file.Close()
-
 	if log_file {
+		file, err := os.OpenFile(SERVER_LOGS, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			log.Fatalf("ERROR: Failed opening %s: [%q]", SERVER_LOGS, err)
+		}
+		defer file.Close()
 		log.SetOutput(file)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
