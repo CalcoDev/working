@@ -1,3 +1,3 @@
 # Go Networking Thingy Calcopod
 
-General structure.
+More information and documentation will be added soon lol
