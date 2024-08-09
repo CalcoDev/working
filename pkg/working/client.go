@@ -1,16 +1,15 @@
-package client
+package working
 
 import (
 	"context"
-	"game_server/action"
-	"game_server/packets"
+	"game-server/pkg/action"
+	"game-server/pkg/packets"
 	"log"
 	"net"
 	"strconv"
 	"time"
 )
 
-const MAX_STREAM_SIZE = 2048
 const CONNECTION_TIMEOUT_DELAY = 3 * time.Second
 const CLIENT_ID_NONE = -1
 
@@ -63,7 +62,7 @@ type Client struct {
 	cancel context.CancelFunc
 }
 
-func New(ctx context.Context, cancel context.CancelFunc) *Client {
+func NewClient(ctx context.Context, cancel context.CancelFunc) *Client {
 	return &Client{
 		// IP:       ip,
 		Port:       0,
@@ -221,6 +220,7 @@ func (s *Client) PollStopped(duration time.Duration) <-chan struct{} {
 }
 
 // TODO(calco): add this function lmao
+// TODO(calco): Disconnect from server
 func (c *Client) Stop() {
 	if c.State != ClientStarted {
 		c.handleStop()
@@ -244,17 +244,4 @@ func (c *Client) handleStop() {
 	c.State = ClientStopped
 	c.OnStopped.Invoke()
 	log.Print("LOG: Stopped client.")
-}
-
-// Adapted from https://0x0f.me/blog/golang-compiler-optimization/
-func Byte2bool(b byte) bool {
-	// The compiler currently only optimizes this form.
-	// See issue 6011.
-	var i bool
-	if b == 0 {
-		i = false
-	} else {
-		i = true
-	}
-	return i
 }

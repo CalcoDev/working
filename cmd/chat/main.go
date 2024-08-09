@@ -4,8 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"game_server/client"
-	"game_server/server"
+	"game-server/pkg/working"
 	"log"
 	"os"
 	"os/signal"
@@ -57,7 +56,7 @@ func handle_client(log_file bool) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	c := client.New(ctx, cancel)
+	c := working.NewClient(ctx, cancel)
 
 	c.OnPacketReceived.Subscribe(func(n int, data []byte) {
 		fmt.Println("RECV: ", data)
@@ -111,8 +110,8 @@ func handle_server(log_file bool) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	s := server.New(ctx, cancel, SERVER_IP, SERVER_PORT)
-	s.OnPacketReceived.Subscribe(func(c *server.DummyClient, n int, data []byte) {
+	s := working.NewServer(ctx, cancel, SERVER_IP, SERVER_PORT)
+	s.OnPacketReceived.Subscribe(func(c *working.DummyClient, n int, data []byte) {
 		fmt.Println("RECV: ", data, " FROM ", c.ClientId)
 	})
 	go s.Start()

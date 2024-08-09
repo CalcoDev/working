@@ -1,10 +1,9 @@
-package server
+package working
 
 import (
 	"context"
-	"game_server/action"
-	"game_server/client"
-	"game_server/packets"
+	"game-server/pkg/action"
+	"game-server/pkg/packets"
 	"log"
 	"net"
 	"strconv"
@@ -14,7 +13,7 @@ import (
 const MAX_STREAM_SIZE = 2048
 
 type DummyClient struct {
-	ClientId client.ClientId
+	ClientId ClientId
 	Address  *net.UDPAddr
 }
 
@@ -44,8 +43,8 @@ type Server struct {
 	DataStream []byte
 
 	Clients      []DummyClient
-	Owner        client.ClientId
-	CurrClientId client.ClientId
+	Owner        ClientId
+	CurrClientId ClientId
 
 	// EventChan chan interface{}
 
@@ -60,7 +59,7 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *Server {
+func NewServer(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *Server {
 	return &Server{
 		IP:    ip,
 		Port:  port,
@@ -69,7 +68,7 @@ func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *
 		DataStream: make([]byte, MAX_STREAM_SIZE),
 
 		Clients: make([]DummyClient, 0),
-		Owner:   client.CLIENT_ID_NONE,
+		Owner:   CLIENT_ID_NONE,
 
 		// EventChan: make(chan interface{}, 16),
 
@@ -209,7 +208,7 @@ func (s *Server) Broadcast(bytes []byte) (*DummyClient, int, error) {
 	return nil, n, nil
 }
 
-func (s *Server) SendToClient(clientId client.ClientId, bytes []byte) (int, error) {
+func (s *Server) SendToClient(clientId ClientId, bytes []byte) (int, error) {
 	c, exists := s.hasClientId(clientId)
 	if !exists {
 		log.Printf("WARN: Tried sending message to invalid client ID [%d].", clientId)
@@ -230,6 +229,7 @@ func (s *Server) sendToDummyClient(c *DummyClient, bytes []byte) (int, error) {
 	return n, err
 }
 
+// TODO(calco): Disconnect clients from server
 func (s *Server) Stop() {
 	if s.State != ServerStarted {
 		s.handleStop()
@@ -285,7 +285,7 @@ func (s *Server) hasDummyClient(addr *net.UDPAddr) (*DummyClient, bool) {
 	return nil, false
 }
 
-func (s *Server) hasClientId(clientId client.ClientId) (*DummyClient, bool) {
+func (s *Server) hasClientId(clientId ClientId) (*DummyClient, bool) {
 	for _, c := range s.Clients {
 		if c.ClientId == clientId {
 			return &c, true
@@ -293,17 +293,4 @@ func (s *Server) hasClientId(clientId client.ClientId) (*DummyClient, bool) {
 	}
 
 	return nil, false
-}
-
-// Taken from https://0x0f.me/blog/golang-compiler-optimization/
-func Bool2byte(b bool) byte {
-	// The compiler currently only optimizes this form.
-	// See issue 6011.
-	var i byte
-	if b {
-		i = 1
-	} else {
-		i = 0
-	}
-	return i
 }
