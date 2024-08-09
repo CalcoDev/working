@@ -1,0 +1,17 @@
+2024/08/09 17:11:06 LOG: Trying to start client with UDP. Addr [127.0.0.1:0].
+2024/08/09 17:11:06 LOG: Established connection with UDP. Addr [127.0.0.1:0].
+2024/08/09 17:11:06 LOG: Sending PING packet to server...
+2024/08/09 17:11:06 LOG: Sent 1 bytes to server ["E"].
+2024/08/09 17:11:06 LOG: Received [3] bytes from server [127.0.0.1:25565]: ["\xfc\x00\x01"]
+2024/08/09 17:11:06 LOG: Confirmed PONG packet from server! Connection established.
+2024/08/09 17:11:06 LOG: Established self information. Client ID [0] | IsOwner [true].
+2024/08/09 17:11:07 LOG: Sent 5 bytes to server ["hello"].
+2024/08/09 17:11:09 LOG: Sent 12 bytes to server ["this is cool"].
+2024/08/09 17:11:10 LOG: Sent 8 bytes to server ["it works"].
+2024/08/09 17:11:11 LOG: Sent 4 bytes to server ["yooo"].
+2024/08/09 17:11:14 LOG: Received [8] bytes from server [127.0.0.1:25565]: ["it works"]
+2024/08/09 17:11:14 LOG: Received [5] bytes from server [127.0.0.1:25565]: ["based"]
+2024/08/09 17:11:16 LOG: Received [6] bytes from server [127.0.0.1:25565]: ["wohooo"]
+2024/08/09 17:11:18 LOG: Received [15] bytes from server [127.0.0.1:25565]: ["this is so cool"]
+2024/08/09 17:11:20 LOG: Received stop signal. Stopping...
+2024/08/09 17:11:20 LOG: Stopped client.

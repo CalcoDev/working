@@ -53,10 +53,11 @@ type Client struct {
 	Server DummyServer
 
 	// Callbacks
-	OnStarted     action.Event
-	OnStopped     action.Event
-	OnConnected   action.Action[*DummyServer]
-	OnDiconnected action.Action[*DummyServer]
+	OnStarted        action.Action
+	OnStopped        action.Action
+	OnConnected      action.Action1[*DummyServer]
+	OnDiconnected    action.Action1[*DummyServer]
+	OnPacketReceived action.Action2[int, []byte]
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -72,10 +73,11 @@ func New(ctx context.Context, cancel context.CancelFunc) *Client {
 		DataStream: make([]byte, MAX_STREAM_SIZE),
 
 		// Callbacks
-		OnStarted:     action.NewEvent(),
-		OnStopped:     action.NewEvent(),
-		OnConnected:   action.NewAction[*DummyServer](),
-		OnDiconnected: action.NewAction[*DummyServer](),
+		OnStarted:        action.NewAction(),
+		OnStopped:        action.NewAction(),
+		OnConnected:      action.NewAction1[*DummyServer](),
+		OnDiconnected:    action.NewAction1[*DummyServer](),
+		OnPacketReceived: action.NewAction2[int, []byte](),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -193,6 +195,12 @@ func (c *Client) listenToUDP() {
 		}
 		// TODO(calco): Do stuff with this data.
 		log.Printf("LOG: Received [%d] bytes from server [%s]: [%q]", n, addr.String(), c.DataStream[:n])
+
+		// TODO(calco): SHOULD NOT copy the data maybe, but I don't want to deal with stuff now
+		dataCopy := make([]byte, n)
+		copy(dataCopy, c.DataStream)
+		// TODO(calco): this is BLOCKING right now
+		c.OnPacketReceived.Invoke(n, dataCopy)
 	}
 }
 

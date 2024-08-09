@@ -50,10 +50,11 @@ type Server struct {
 	// EventChan chan interface{}
 
 	// Callbacks
-	OnStarted           action.Event
-	OnStopped           action.Event
-	OnClientConnected   action.Action[*DummyClient]
-	OnClientDiconnected action.Action[*DummyClient]
+	OnStarted           action.Action
+	OnStopped           action.Action
+	OnClientConnected   action.Action1[*DummyClient]
+	OnClientDiconnected action.Action1[*DummyClient]
+	OnPacketReceived    action.Action3[*DummyClient, int, []byte]
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -73,10 +74,11 @@ func New(ctx context.Context, cancel context.CancelFunc, ip string, port uint) *
 		// EventChan: make(chan interface{}, 16),
 
 		// Callbacks
-		OnStarted:           action.NewEvent(),
-		OnStopped:           action.NewEvent(),
-		OnClientConnected:   action.NewAction[*DummyClient](),
-		OnClientDiconnected: action.NewAction[*DummyClient](),
+		OnStarted:           action.NewAction(),
+		OnStopped:           action.NewAction(),
+		OnClientConnected:   action.NewAction1[*DummyClient](),
+		OnClientDiconnected: action.NewAction1[*DummyClient](),
+		OnPacketReceived:    action.NewAction3[*DummyClient, int, []byte](),
 
 		ctx:    ctx,
 		cancel: cancel,
@@ -187,7 +189,11 @@ func (s *Server) listenToUDP() {
 		} else {
 			log.Printf("LOG: Received [%d] bytes from [%d]: [%q]", n, c.ClientId, s.DataStream[:n])
 
-			// TODO(calco): Do stuff with this data.
+			// TODO(calco): SHOULD NOT copy the data maybe, but I don't want to deal with stuff now
+			dataCopy := make([]byte, n)
+			copy(dataCopy, s.DataStream)
+			// TODO(calco): this is BLOCKING right now
+			s.OnPacketReceived.Invoke(c, n, dataCopy)
 		}
 	}
 }

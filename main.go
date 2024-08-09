@@ -58,6 +58,11 @@ func handle_client(log_file bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	c := client.New(ctx, cancel)
+
+	c.OnPacketReceived.Subscribe(func(n int, data []byte) {
+		fmt.Println("RECV: ", data)
+	})
+
 	go c.Start(SERVER_IP + ":" + strconv.FormatUint(uint64(SERVER_PORT), 10))
 
 	interruptChan := make(chan os.Signal, 1)
@@ -107,6 +112,9 @@ func handle_server(log_file bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	s := server.New(ctx, cancel, SERVER_IP, SERVER_PORT)
+	s.OnPacketReceived.Subscribe(func(c *server.DummyClient, n int, data []byte) {
+		fmt.Println("RECV: ", data, " FROM ", c.ClientId)
+	})
 	go s.Start()
 
 	interruptChan := make(chan os.Signal, 1)
