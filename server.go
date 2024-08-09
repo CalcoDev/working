@@ -232,6 +232,9 @@ func (s *Server) sendToDummyClient(c *DummyClient, bytes []byte) (int, error) {
 
 // TODO(calco): Disconnect clients from server
 func (s *Server) Stop() {
+	if s.State == ServerStopping || s.State == ServerStopped {
+		return
+	}
 	if s.State != ServerStarted {
 		s.handleStop()
 		return

@@ -223,6 +223,9 @@ func (s *Client) PollStopped(duration time.Duration) <-chan struct{} {
 // TODO(calco): add this function lmao
 // TODO(calco): Disconnect from server
 func (c *Client) Stop() {
+	if c.State == ClientStopping || c.State == ClientStopped {
+		return
+	}
 	if c.State != ClientStarted {
 		c.handleStop()
 		return
