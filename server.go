@@ -210,7 +210,7 @@ func (s *Server) Broadcast(bytes []byte) (*DummyClient, int, error) {
 }
 
 func (s *Server) SendToClient(clientId ClientId, bytes []byte) (int, error) {
-	c, exists := s.hasClientId(clientId)
+	c, exists := s.HasClientId(clientId)
 	if !exists {
 		log.Printf("WARN: Tried sending message to invalid client ID [%d].", clientId)
 	}
@@ -289,7 +289,7 @@ func (s *Server) hasDummyClient(addr *net.UDPAddr) (*DummyClient, bool) {
 	return nil, false
 }
 
-func (s *Server) hasClientId(clientId ClientId) (*DummyClient, bool) {
+func (s *Server) HasClientId(clientId ClientId) (*DummyClient, bool) {
 	for _, c := range s.Clients {
 		if c.ClientId == clientId {
 			return &c, true
